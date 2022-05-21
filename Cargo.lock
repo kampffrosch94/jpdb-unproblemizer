@@ -109,12 +109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chumsky"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d02796e4586c6c41aeb68eae9bfb4558a522c35f1430c14b40136c3706e09e4"
-
-[[package]]
 name = "const_fn"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -562,8 +556,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "chumsky",
- "lazy_static",
  "reqwest",
  "scraper",
  "serde",

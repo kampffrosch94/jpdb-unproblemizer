@@ -3,7 +3,6 @@ mod model;
 use crate::model::{Card, CardEvent};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Duration, TimeZone, Utc};
-use lazy_static::lazy_static;
 use reqwest::blocking::Client;
 use reqwest::cookie::Jar;
 use std::path::Path;
@@ -12,25 +11,20 @@ const DOMAIN: &str = "jpdb.io";
 const URL_PREFIX: &str = "https://";
 const COOKIE_NAME: &str = "sid";
 
-lazy_static! {
-    static ref CLIENT: Client = {
-        let jar = Jar::default();
-        let cookie_content = std::fs::read_to_string("cookie").unwrap();
-        let cookie_str = format!("{COOKIE_NAME}={cookie_content}; Domain={DOMAIN}");
-        jar.add_cookie_str(
-            &cookie_str,
-            &format!("{URL_PREFIX}{DOMAIN}").parse().unwrap(),
-        );
-        Client::builder()
-            .cookie_store(true)
-            .cookie_provider(jar.into())
-            .build()
-            .unwrap()
-    };
-}
-
 fn main() -> Result<()> {
-    println!("Let's go.");
+    println!("Program start.");
+
+    let jar = Jar::default();
+    let cookie_content = std::fs::read_to_string("cookie").unwrap();
+    let cookie_str = format!("{COOKIE_NAME}={cookie_content}; Domain={DOMAIN}");
+    jar.add_cookie_str(
+        &cookie_str,
+        &format!("{URL_PREFIX}{DOMAIN}").parse()?,
+    );
+    let client = Client::builder()
+        .cookie_store(true)
+        .cookie_provider(jar.into())
+        .build()?;
 
     let fname = "history.json";
     let history_text = if Path::new(fname).exists() {
@@ -39,8 +33,8 @@ fn main() -> Result<()> {
     } else {
         println!("Fetching remote history");
         let url = "https://jpdb.io/export/vocabulary-reviews.json";
-        let req = CLIENT.get(url).build()?;
-        let body = CLIENT.execute(req)?.text()?;
+        let req = client.get(url).build()?;
+        let body = client.execute(req)?.text()?;
         std::fs::write(fname, &body)?;
         body
     };
@@ -67,8 +61,8 @@ fn main() -> Result<()> {
             "https://jpdb.io/vocabulary/{}/{}/review-history",
             card.vid, card.spelling
         );
-        let req = CLIENT.get(history_url).build()?;
-        let body = CLIENT.execute(req)?.text()?;
+        let req = client.get(history_url).build()?;
+        let body = client.execute(req)?.text()?;
 
         let document = scraper::Html::parse_document(&body);
         let mut payload: Vec<(String, String)> = Vec::new();
@@ -88,8 +82,8 @@ fn main() -> Result<()> {
         }
 
         let delete_url = "https://jpdb.io/clear-review-history";
-        let req = CLIENT.post(delete_url).form(&payload).build()?;
-        if !CLIENT.execute(req)?.status().is_success() {
+        let req = client.post(delete_url).form(&payload).build()?;
+        if !client.execute(req)?.status().is_success() {
             bail!("Error executing clear query")
         }
     }
