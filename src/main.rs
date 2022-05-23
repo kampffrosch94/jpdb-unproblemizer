@@ -64,6 +64,7 @@ fn main() -> Result<()> {
                 card.vid, card.spelling
             );
             println!("{}", history_url);
+            open::that(history_url)?;
         }
         return Ok(());
     }
