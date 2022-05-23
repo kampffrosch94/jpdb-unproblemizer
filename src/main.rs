@@ -12,6 +12,7 @@ const URL_PREFIX: &str = "https://";
 const COOKIE_NAME: &str = "sid";
 
 fn main() -> Result<()> {
+    let dry_run = true;
     println!("Program start.");
 
     let jar = Jar::default();
@@ -43,7 +44,7 @@ fn main() -> Result<()> {
 
     let current_time = Utc::now();
     let history: model::History = serde_json::from_str(&history_text)?;
-    let bad_cards = history.values().flatten().filter(|card: &&Card| {
+    let bad_cards = || history.values().flatten().filter(|card: &&Card| {
         card.reviews
             .iter()
             .filter(|ev: &&CardEvent| {
@@ -55,7 +56,19 @@ fn main() -> Result<()> {
             >= 7
     });
 
-    for card in bad_cards {
+    if dry_run {
+        println!("Bad cards");
+        for card in bad_cards() {
+            let history_url = format!(
+                "https://jpdb.io/vocabulary/{}/{}/review-history",
+                card.vid, card.spelling
+            );
+            println!("{}", history_url);
+        }
+        return Ok(());
+    }
+
+    for card in bad_cards() {
         println!("Erasing history of {}", card.spelling);
         let history_url = format!(
             "https://jpdb.io/vocabulary/{}/{}/review-history",
