@@ -6,6 +6,7 @@ use chrono::{Duration, TimeZone, Utc};
 use reqwest::blocking::Client;
 use reqwest::cookie::Jar;
 use std::path::Path;
+use std::thread::sleep;
 
 const DOMAIN: &str = "jpdb.io";
 const URL_PREFIX: &str = "https://";
@@ -49,11 +50,11 @@ fn main() -> Result<()> {
             .iter()
             .filter(|ev: &&CardEvent| {
                 let ts = Utc.timestamp(ev.timestamp, 0);
-                current_time - ts <= Duration::days(7)
+                current_time - ts <= Duration::days(1)
                     && failure_states.contains(&ev.grade.as_str())
             })
             .count()
-            >= 7
+            >= 3
     });
 
     if dry_run {
@@ -65,6 +66,7 @@ fn main() -> Result<()> {
             );
             println!("{}", history_url);
             open::that(history_url)?;
+            sleep(std::time::Duration::from_millis(500));
         }
         return Ok(());
     }
