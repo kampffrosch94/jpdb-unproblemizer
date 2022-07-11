@@ -3,34 +3,30 @@ mod model;
 use crate::model::{Card, CardEvent};
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Duration, TimeZone, Utc};
-use lazy_static::lazy_static;
 use reqwest::blocking::Client;
 use reqwest::cookie::Jar;
 use std::path::Path;
+use std::thread::sleep;
 
 const DOMAIN: &str = "jpdb.io";
 const URL_PREFIX: &str = "https://";
 const COOKIE_NAME: &str = "sid";
 
-lazy_static! {
-    static ref CLIENT: Client = {
-        let jar = Jar::default();
-        let cookie_content = std::fs::read_to_string("cookie").unwrap();
-        let cookie_str = format!("{COOKIE_NAME}={cookie_content}; Domain={DOMAIN}");
-        jar.add_cookie_str(
-            &cookie_str,
-            &format!("{URL_PREFIX}{DOMAIN}").parse().unwrap(),
-        );
-        Client::builder()
-            .cookie_store(true)
-            .cookie_provider(jar.into())
-            .build()
-            .unwrap()
-    };
-}
-
 fn main() -> Result<()> {
-    println!("Let's go.");
+    let dry_run = true;
+    println!("Program start.");
+
+    let jar = Jar::default();
+    let cookie_content = std::fs::read_to_string("cookie").unwrap();
+    let cookie_str = format!("{COOKIE_NAME}={cookie_content}; Domain={DOMAIN}");
+    jar.add_cookie_str(
+        &cookie_str,
+        &format!("{URL_PREFIX}{DOMAIN}").parse()?,
+    );
+    let client = Client::builder()
+        .cookie_store(true)
+        .cookie_provider(jar.into())
+        .build()?;
 
     let fname = "history.json";
     let history_text = if Path::new(fname).exists() {
@@ -39,8 +35,8 @@ fn main() -> Result<()> {
     } else {
         println!("Fetching remote history");
         let url = "https://jpdb.io/export/vocabulary-reviews.json";
-        let req = CLIENT.get(url).build()?;
-        let body = CLIENT.execute(req)?.text()?;
+        let req = client.get(url).build()?;
+        let body = client.execute(req)?.text()?;
         std::fs::write(fname, &body)?;
         body
     };
@@ -49,26 +45,40 @@ fn main() -> Result<()> {
 
     let current_time = Utc::now();
     let history: model::History = serde_json::from_str(&history_text)?;
-    let bad_cards = history.values().flatten().filter(|card: &&Card| {
+    let bad_cards = || history.values().flatten().filter(|card: &&Card| {
         card.reviews
             .iter()
             .filter(|ev: &&CardEvent| {
                 let ts = Utc.timestamp(ev.timestamp, 0);
-                current_time - ts <= Duration::days(7)
+                current_time - ts <= Duration::days(1)
                     && failure_states.contains(&ev.grade.as_str())
             })
             .count()
-            >= 7
+            >= 3
     });
 
-    for card in bad_cards {
+    if dry_run {
+        println!("Bad cards");
+        for card in bad_cards() {
+            let history_url = format!(
+                "https://jpdb.io/vocabulary/{}/{}/review-history",
+                card.vid, card.spelling
+            );
+            println!("{}", history_url);
+            open::that(history_url)?;
+            sleep(std::time::Duration::from_millis(500));
+        }
+        return Ok(());
+    }
+
+    for card in bad_cards() {
         println!("Erasing history of {}", card.spelling);
         let history_url = format!(
             "https://jpdb.io/vocabulary/{}/{}/review-history",
             card.vid, card.spelling
         );
-        let req = CLIENT.get(history_url).build()?;
-        let body = CLIENT.execute(req)?.text()?;
+        let req = client.get(history_url).build()?;
+        let body = client.execute(req)?.text()?;
 
         let document = scraper::Html::parse_document(&body);
         let mut payload: Vec<(String, String)> = Vec::new();
@@ -88,8 +98,8 @@ fn main() -> Result<()> {
         }
 
         let delete_url = "https://jpdb.io/clear-review-history";
-        let req = CLIENT.post(delete_url).form(&payload).build()?;
-        if !CLIENT.execute(req)?.status().is_success() {
+        let req = client.post(delete_url).form(&payload).build()?;
+        if !client.execute(req)?.status().is_success() {
             bail!("Error executing clear query")
         }
     }
