@@ -6,12 +6,14 @@ use chrono::{Duration, TimeZone, Utc};
 use reqwest::blocking::Client;
 use reqwest::cookie::Jar;
 use std::path::Path;
+use std::thread::sleep;
 
 const DOMAIN: &str = "jpdb.io";
 const URL_PREFIX: &str = "https://";
 const COOKIE_NAME: &str = "sid";
 
 fn main() -> Result<()> {
+    let dry_run = true;
     println!("Program start.");
 
     let jar = Jar::default();
@@ -43,19 +45,33 @@ fn main() -> Result<()> {
 
     let current_time = Utc::now();
     let history: model::History = serde_json::from_str(&history_text)?;
-    let bad_cards = history.values().flatten().filter(|card: &&Card| {
+    let bad_cards = || history.values().flatten().filter(|card: &&Card| {
         card.reviews
             .iter()
             .filter(|ev: &&CardEvent| {
                 let ts = Utc.timestamp(ev.timestamp, 0);
-                current_time - ts <= Duration::days(7)
+                current_time - ts <= Duration::days(1)
                     && failure_states.contains(&ev.grade.as_str())
             })
             .count()
-            >= 7
+            >= 3
     });
 
-    for card in bad_cards {
+    if dry_run {
+        println!("Bad cards");
+        for card in bad_cards() {
+            let history_url = format!(
+                "https://jpdb.io/vocabulary/{}/{}/review-history",
+                card.vid, card.spelling
+            );
+            println!("{}", history_url);
+            open::that(history_url)?;
+            sleep(std::time::Duration::from_millis(500));
+        }
+        return Ok(());
+    }
+
+    for card in bad_cards() {
         println!("Erasing history of {}", card.spelling);
         let history_url = format!(
             "https://jpdb.io/vocabulary/{}/{}/review-history",
