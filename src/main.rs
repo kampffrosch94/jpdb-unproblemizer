@@ -1,6 +1,6 @@
 mod model;
 
-use crate::model::{Card, CardEvent};
+use crate::model::*;
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{Duration, TimeZone, Utc};
 use reqwest::blocking::Client;
@@ -19,10 +19,7 @@ fn main() -> Result<()> {
     let jar = Jar::default();
     let cookie_content = std::fs::read_to_string("cookie").unwrap();
     let cookie_str = format!("{COOKIE_NAME}={cookie_content}; Domain={DOMAIN}");
-    jar.add_cookie_str(
-        &cookie_str,
-        &format!("{URL_PREFIX}{DOMAIN}").parse()?,
-    );
+    jar.add_cookie_str(&cookie_str, &format!("{URL_PREFIX}{DOMAIN}").parse()?);
     let client = Client::builder()
         .cookie_store(true)
         .cookie_provider(jar.into())
@@ -45,17 +42,22 @@ fn main() -> Result<()> {
 
     let current_time = Utc::now();
     let history: model::History = serde_json::from_str(&history_text)?;
-    let bad_cards = || history.values().flatten().filter(|card: &&Card| {
-        card.reviews
+    let bad_cards = || {
+        history
+            .cards_vocabulary_jp_en
             .iter()
-            .filter(|ev: &&CardEvent| {
-                let ts = Utc.timestamp(ev.timestamp, 0);
-                current_time - ts <= Duration::days(1)
-                    && failure_states.contains(&ev.grade.as_str())
+            .filter(|card: &&CardVocabularyJpEn| {
+                card.reviews
+                    .iter()
+                    .filter(|ev: &&CardEvent| {
+                        let ts = Utc.timestamp(ev.timestamp, 0);
+                        current_time - ts <= Duration::days(1)
+                            && failure_states.contains(&ev.grade.as_str())
+                    })
+                    .count()
+                    >= 3
             })
-            .count()
-            >= 3
-    });
+    };
 
     if dry_run {
         println!("Bad cards");

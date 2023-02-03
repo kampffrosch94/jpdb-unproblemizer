@@ -1,11 +1,12 @@
 use serde::Deserialize;
-use std::collections::HashMap;
-
-pub type History = HashMap<LanguageDirection, Vec<Card>>;
-pub type LanguageDirection = String;
 
 #[derive(Deserialize, Debug)]
-pub struct Card {
+pub struct History {
+    pub cards_vocabulary_jp_en: Vec<CardVocabularyJpEn>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CardVocabularyJpEn {
     pub spelling: String,
     pub reading: String,
     pub vid: u64,
