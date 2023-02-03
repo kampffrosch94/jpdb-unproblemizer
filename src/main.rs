@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         std::fs::read_to_string(fname)?
     } else {
         println!("Fetching remote history");
-        let url = "https://jpdb.io/export/vocabulary-reviews.json";
+        let url = "https://jpdb.io/export/reviews.json?";
         let req = client.get(url).build()?;
         let body = client.execute(req)?.text()?;
         std::fs::write(fname, &body)?;
