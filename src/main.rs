@@ -42,22 +42,35 @@ fn main() -> Result<()> {
 
     let current_time = Utc::now();
     let history: model::History = serde_json::from_str(&history_text)?;
-    let bad_cards = || {
-        history
-            .cards_vocabulary_jp_en
+
+    let vocab_filter = |card: &&CardVocabularyJpEn| {
+        card.reviews
             .iter()
-            .filter(|card: &&CardVocabularyJpEn| {
-                card.reviews
-                    .iter()
-                    .filter(|ev: &&CardEvent| {
-                        let ts = Utc.timestamp(ev.timestamp, 0);
-                        current_time - ts <= Duration::days(1)
-                            && failure_states.contains(&ev.grade.as_str())
-                    })
-                    .count()
-                    >= 3
+            .filter(|ev: &&CardEvent| {
+                let ts = Utc.timestamp(ev.timestamp, 0);
+                current_time - ts <= Duration::hours(8)
+                    && failure_states.contains(&ev.grade.as_str())
             })
+            .count()
+            >= 3
+            && failure_states.contains(&card.reviews.iter().last().unwrap().grade.as_str())
     };
+
+    let bad_cards = || history.cards_vocabulary_jp_en.iter().filter(vocab_filter);
+
+    let kanji_filter = |card: &&CardKanjiCharKeyword| {
+        card.reviews
+            .iter()
+            .filter(|ev: &&CardEvent| {
+                let ts = Utc.timestamp(ev.timestamp, 0);
+                current_time - ts <= Duration::hours(8)
+                    && failure_states.contains(&ev.grade.as_str())
+            })
+            .count()
+            >= 5
+            && failure_states.contains(&card.reviews.iter().last().unwrap().grade.as_str())
+    };
+    let bad_kanji = history.cards_kanji_char_keyword.iter().filter(kanji_filter);
 
     if dry_run {
         println!("Bad cards");
@@ -70,6 +83,13 @@ fn main() -> Result<()> {
             open::that(history_url)?;
             sleep(std::time::Duration::from_millis(500));
         }
+        for kanji in bad_kanji {
+            let history_url = format!("https://jpdb.io/kanji/{}/review-history", kanji.character);
+            println!("{}", history_url);
+            open::that(history_url)?;
+            sleep(std::time::Duration::from_millis(500));
+        }
+
         return Ok(());
     }
 
